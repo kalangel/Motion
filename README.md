@@ -1,72 +1,66 @@
-# Prestige Estate — 3D-тур по дому и участку
+# RTX 6000 — Enter the Silicon
 
-Полноэкранный интерактивный 3D-тур для продажи загородного дома: клиент «ходит» по дому
-прямо в браузере, приближает детали, вылетает за окно и осматривает весь дом, участок
-с забором, дорожкой и окружающим лесом на холмах.
+A cinematic, scroll-driven product reveal for the NVIDIA RTX 6000. One continuous
+camera move takes the viewer from a floating graphics card, through a physically
+exploded view of every component, straight into the AD102 die — where the GPU
+architecture unfolds as a glowing silicon city.
 
-## Возможности
+## The journey (driven entirely by scrolling)
 
-| Режим | Что делает | Как включить |
-|---|---|---|
-| 🚶 Прогулка | Ходьба от первого лица: клик по полу — шаг, лестница ведёт на 2 этаж | кнопка «Прогулка» или клик по комнате |
-| 🔍 Зум | Приближение/отдаление деталей | колесо мыши, кнопки +/−, щипок на телефоне |
-| 🪟 Вылет за окно | Отдалите до упора — камера вылетает через ближайшее окно и показывает весь дом снаружи | колесо «в минус» до заполнения индикатора |
-| 🏡 Весь дом | Орбитальный облёт здания, участка и окрестностей | кнопка «Весь дом» |
-| ✂️ Разрез | Дом без крыши — планировка сверху (dollhouse) | кнопка «Разрез» |
-| 📷 360° фото | Реальная панорамная фотография, снятая на объекте | кнопка «360° фото» или маркер в кабинете |
+1. **Hero** — the card floats in space, fans spinning, studio reflections.
+2. **Showcase** — a slow full rotation reveals the industrial design.
+3. **Exploded view** — shroud, axial fans, fin stack, vapor chamber, GDDR6
+   memory, AD102 die, PCB, backplate and screws separate with smooth physical
+   motion; animated dashed connectors trace the assembly axis and every part
+   receives an elegant label.
+4. **Fly-through** — the camera keeps moving forward *through* the exploded
+   stack; each layer dissolves as you pass it.
+5. **The dive** — the die energizes and the camera plunges through its surface.
+6. **Inside the chip** — a seven-stop architecture tour: CUDA Cores, Tensor
+   Cores, RT Cores, L2 Cache, Memory Controller, AI Processing (live data-flow
+   particles) and the Ray Tracing Pipeline (a bouncing light beam), ending on a
+   full-die overview with the closing statement.
 
-Работает на компьютере, планшете и телефоне. Статический сайт без сборки
-(Three.js лежит в `vendor/`).
+## Stack
 
-## Запуск локально
+- **Next.js 14** (App Router) + **React 18** + **TypeScript**
+- **Tailwind CSS** for the UI layer
+- **three.js + @react-three/fiber + drei** — fully procedural 3D (no model
+  files, no external assets; even the die floorplan and logotype are canvas
+  textures generated at runtime)
+- **GSAP ScrollTrigger** — writes a single normalized progress value
+- **Framer Motion** — hero entrance, nav and micro-interactions
+- **@react-three/postprocessing** — subtle bloom + vignette
+
+## How the animation system works
+
+`lib/scroll.ts` holds one `scrollState` object. GSAP's ScrollTrigger writes
+`target`; the render loop critically damps `current` toward it every frame, so
+all downstream animation is buttery regardless of wheel input. `lib/phases.ts`
+defines the chapter boundaries; the camera rig, the exploded model, the die
+world and the DOM overlay all read the same damped progress — everything stays
+perfectly in sync at 60 fps with zero React re-renders during scroll.
+
+## Run
 
 ```bash
-python3 -m http.server 8000
-# затем откройте http://localhost:8000
+npm install
+npm run dev    # http://localhost:3000
+npm run build && npm start
 ```
 
-## Деплой
+Deploys to Vercel with zero configuration (framework preset: Next.js).
 
-- **Vercel**: Import репозитория → Framework Preset: **Other** → Build Command: пусто →
-  Output Directory: `./` → Deploy.
-- **GitHub Pages**: Settings → Pages → Deploy from a branch → `main` + `/ (root)`.
-- **Netlify**: подключить репозиторий без команды сборки.
-
-## Структура
+## Structure
 
 ```
-index.html          — страница (полноэкранный тур + интерфейс)
-css/style.css       — стили
-js/house.js         — 3D-модель дома, участка, рельефа, леса и неба
-js/tour.js          — движок тура: режимы, камера, перелёты, панорама
-js/main.js          — связка интерфейса с движком
-assets/pano.jpg     — реальная 360°-панорама (equirectangular)
-assets/textures/    — бесшовные текстуры (черепица, паркет, трава, небо…)
-vendor/three.min.js — Three.js r128
+app/                    layout, page, global styles
+components/Experience   Canvas + GSAP scroll driver + lighting
+components/Overlay      nav, hero, captions, stage panels, finale
+components/scene/
+  GPUCard     procedural RTX 6000 + exploded view + labels + connectors
+  DieWorld    the silicon city (instanced cores, shaders, particles, beam)
+  CameraRig   one camera choreography across both worlds
+lib/scroll.ts           damped scroll state + easing helpers
+lib/phases.ts           master timeline + architecture tour content
 ```
-
-## Как адаптировать под свой объект
-
-1. **Тексты и цена** — в `index.html` (название, цена, площадь, телефон агента).
-2. **360°-панорамы** — замените `assets/pano.jpg` на свою equirectangular-панораму (2:1).
-   Точка съёмки — `tour.panoRoom` в `js/tour.js`, ориентация — `panoSphere.rotation.y`.
-3. **Планировка** — в `js/house.js`: `rooms` (точки входа и взгляда), `wallRun` (стены
-   с проёмами), `windowUnit` (окна), функции-конструкторы мебели.
-4. **Текстуры** — файлы в `assets/textures/` можно заменить любыми бесшовными
-   изображениями с теми же именами (черепица `roof.jpg`, фасад `plaster.jpg`,
-   паркет `wood_floor.jpg`, трава `grass.jpg`, небо `sky.jpg` 2:1 и т.д.).
-   Текущий набор сгенерирован процедурно и свободен от лицензий.
-5. **Окружение** — рельеф задаёт функция `hillH(x, z)`, лес — `buildForest`,
-   забор — `buildFence` в `js/house.js`.
-
-## Технические детали
-
-- Three.js r128 (UMD), sRGB-конвейер: текстуры с `sRGBEncoding`, цвета материалов
-  конвертируются `convertSRGBToLinear`, вывод — `renderer.outputEncoding = sRGBEncoding`.
-- Материалы Phong (per-pixel свет): hemisphere + солнце с тенями (PCF, normalBias)
-  + точечные светильники в комнатах.
-- Ландшафт — displaced-плоскость с ровной площадкой у дома и холмами вокруг;
-  лес — стволы с текстурой коры и кроны из скрещенных плоскостей с альфа-листвой.
-- Перелёты камеры (в окно/из окна) — сплайны CatmullRom, стёкла на время пролёта
-  становятся прозрачными.
-- Переход между этажами — маршрут через лестницу, между комнатами — через проёмы.
