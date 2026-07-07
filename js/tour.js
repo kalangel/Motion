@@ -76,6 +76,7 @@
     c2.fillText(text, w / 2, 33 * scale);
     const tex = new T.CanvasTexture(cv);
     tex.minFilter = T.LinearFilter;
+    tex.encoding = T.sRGBEncoding;
     const sp = new T.Sprite(new T.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
     const aspect = w / (62 * scale);
     const hgt = opts.height || 0.55;
@@ -92,6 +93,7 @@
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = T.PCFSoftShadowMap;
+    renderer.outputEncoding = T.sRGBEncoding;
     container.appendChild(renderer.domElement);
     tour.renderer = renderer;
 
@@ -231,8 +233,8 @@
     const outPt = w.center.clone().add(w.normal.clone().multiplyScalar(3.2));
     outPt.y = w.center.y + 0.8;
     const dir = w.normal.clone().add(new T.Vector3(0, 0, 0)).normalize();
-    const farPt = tour.orbit.target.clone().add(dir.multiplyScalar(17));
-    farPt.y = 10.5;
+    const farPt = tour.orbit.target.clone().add(dir.multiplyScalar(18));
+    farPt.y = 8.5;
     const look0 = tour.camera.position.clone().add(lookDir().multiplyScalar(6));
     fly([tour.pos.clone(), inPt, outPt, farPt], look0, tour.orbit.target.clone(), 2600, function () {
       tour.mode = 'orbit';

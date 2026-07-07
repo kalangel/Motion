@@ -12,6 +12,7 @@
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html { scroll-behavior: smooth; }
+body.tour-only { overflow: hidden; height: 100vh; }
 body {
   font-family: "Golos Text", "Segoe UI", system-ui, Arial, sans-serif;
   background: var(--paper);
