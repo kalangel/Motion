@@ -174,23 +174,60 @@ export default function GPUCard({ mobile }: { mobile: boolean }) {
       roughness: 0.45,
     });
 
-  const dieMat = useMemo(
-    () =>
-      new THREE.MeshStandardMaterial({
-        map: tex.die,
-        metalness: 0.5,
-        roughness: 0.35,
-        emissive: new THREE.Color("#ffffff"),
-        emissiveMap: tex.die,
-        emissiveIntensity: 0.3,
-      }),
-    [tex.die]
-  );
-  const dieSide = useMemo(
-    () =>
-      new THREE.MeshStandardMaterial({ color: "#0d1b14", metalness: 0.4, roughness: 0.5 }),
-    []
-  );
+  /* Die assembly: substrate → raised BGA package → glossy silicon on top.
+     The raised blocks reuse exact crops of the photo so the texture stays
+     continuous — measured from the image: package square 26% at center,
+     silicon 8.2% at center. */
+  const dieParts = useMemo(() => {
+    const pkgTex = tex.die.clone();
+    pkgTex.repeat.set(0.26, 0.26);
+    pkgTex.offset.set(0.375, 0.36);
+    pkgTex.needsUpdate = true;
+    const topTex = tex.die.clone();
+    topTex.repeat.set(0.082, 0.078);
+    topTex.offset.set(0.462, 0.455);
+    topTex.needsUpdate = true;
+
+    const substrate = new THREE.MeshStandardMaterial({
+      map: tex.die,
+      metalness: 0.5,
+      roughness: 0.38,
+      bumpMap: tex.die,
+      bumpScale: 0.02,
+      emissive: new THREE.Color("#ffffff"),
+      emissiveMap: tex.die,
+      emissiveIntensity: 0.3,
+    });
+    const pkg = new THREE.MeshStandardMaterial({
+      map: pkgTex,
+      metalness: 0.55,
+      roughness: 0.4,
+      bumpMap: pkgTex,
+      bumpScale: 0.015,
+      emissive: new THREE.Color("#ffffff"),
+      emissiveMap: pkgTex,
+      emissiveIntensity: 0.3,
+    });
+    const silicon = new THREE.MeshStandardMaterial({
+      map: topTex,
+      metalness: 0.85,
+      roughness: 0.14,
+      emissive: new THREE.Color("#ffffff"),
+      emissiveMap: topTex,
+      emissiveIntensity: 0.3,
+    });
+    const sideGreen = new THREE.MeshStandardMaterial({
+      color: "#0c1a14",
+      metalness: 0.4,
+      roughness: 0.5,
+    });
+    const sideDark = new THREE.MeshStandardMaterial({
+      color: "#15181b",
+      metalness: 0.7,
+      roughness: 0.3,
+    });
+    return { substrate, pkg, silicon, sideGreen, sideDark };
+  }, [tex.die]);
 
   /* Pass-through dissolve: applied live to whatever materials the part's
      meshes currently hold (survives re-renders that recreate materials). */
@@ -343,7 +380,9 @@ export default function GPUCard({ mobile }: { mobile: boolean }) {
 
     /* ---- die energizes on approach ---- */
     const heat = smooth(range(p, PH.approach[0], PH.dive[0] + 0.02));
-    dieMat.emissiveIntensity = 0.3 + heat * 2.6;
+    dieParts.substrate.emissiveIntensity = 0.3 + heat * 1.9;
+    dieParts.pkg.emissiveIntensity = 0.3 + heat * 2.4;
+    dieParts.silicon.emissiveIntensity = 0.3 + heat * 3.2;
     if (dieGlow.current) dieGlow.current.intensity = heat * 2.2;
 
     /* ---- labels (anchored to their moving parts) ---- */
@@ -497,9 +536,46 @@ export default function GPUCard({ mobile }: { mobile: boolean }) {
 
         {/* ======================= GPU DIE ======================= */}
         <group ref={(r) => void (partRefs.current.die = r)}>
-          {/* package photo on the front face, dark substrate sides */}
-          <mesh material={[dieSide, dieSide, dieSide, dieSide, dieMat, dieSide]}>
-            <boxGeometry args={[0.64, 0.64, 0.028]} />
+          {/* substrate */}
+          <mesh
+            material={[
+              dieParts.sideGreen,
+              dieParts.sideGreen,
+              dieParts.sideGreen,
+              dieParts.sideGreen,
+              dieParts.substrate,
+              dieParts.sideGreen,
+            ]}
+          >
+            <boxGeometry args={[0.64, 0.64, 0.02]} />
+          </mesh>
+          {/* raised BGA package */}
+          <mesh
+            position={[0.003, -0.006, 0.016]}
+            material={[
+              dieParts.sideGreen,
+              dieParts.sideGreen,
+              dieParts.sideGreen,
+              dieParts.sideGreen,
+              dieParts.pkg,
+              dieParts.sideGreen,
+            ]}
+          >
+            <boxGeometry args={[0.166, 0.166, 0.012]} />
+          </mesh>
+          {/* glossy silicon on top */}
+          <mesh
+            position={[0.002, -0.004, 0.026]}
+            material={[
+              dieParts.sideDark,
+              dieParts.sideDark,
+              dieParts.sideDark,
+              dieParts.sideDark,
+              dieParts.silicon,
+              dieParts.sideDark,
+            ]}
+          >
+            <boxGeometry args={[0.053, 0.05, 0.008]} />
           </mesh>
           <pointLight ref={dieGlow} color="#7cf5d4" intensity={0} distance={2.5} />
         </group>
