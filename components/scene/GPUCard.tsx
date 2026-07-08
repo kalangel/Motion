@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
-import { Html, Line } from "@react-three/drei";
+import { Html, Line, useTexture } from "@react-three/drei";
 import { scrollState, range, smooth, lerp } from "@/lib/scroll";
 import { PH } from "@/lib/phases";
 
@@ -92,87 +92,8 @@ function makeLogoTexture() {
   return t;
 }
 
-function makeDieTexture() {
-  const s = 512;
-  const c = document.createElement("canvas");
-  c.width = c.height = s;
-  const ctx = c.getContext("2d")!;
-  ctx.fillStyle = "#04070a";
-  ctx.fillRect(0, 0, s, s);
-
-  let seed = 7;
-  const rnd = () => {
-    seed = (seed * 16807) % 2147483647;
-    return seed / 2147483647;
-  };
-
-  // floorplan blocks
-  const cols = 10;
-  const rows = 8;
-  const cw = (s - 48) / cols;
-  const ch = (s - 48) / rows;
-  for (let i = 0; i < cols; i++) {
-    for (let j = 0; j < rows; j++) {
-      const x = 24 + i * cw;
-      const y = 24 + j * ch;
-      const central = j >= 3 && j <= 4;
-      ctx.fillStyle = central ? "#0d1a1e" : "#081114";
-      ctx.fillRect(x + 2, y + 2, cw - 4, ch - 4);
-      ctx.strokeStyle = `rgba(110, 240, 200, ${central ? 0.5 : 0.28})`;
-      ctx.lineWidth = 1;
-      ctx.strokeRect(x + 2.5, y + 2.5, cw - 5, ch - 5);
-      // inner subdivisions
-      const n = 2 + Math.floor(rnd() * 3);
-      ctx.strokeStyle = "rgba(110, 240, 200, 0.14)";
-      for (let k = 1; k < n; k++) {
-        ctx.beginPath();
-        ctx.moveTo(x + 2 + ((cw - 4) * k) / n, y + 4);
-        ctx.lineTo(x + 2 + ((cw - 4) * k) / n, y + ch - 4);
-        ctx.stroke();
-      }
-    }
-  }
-  // bus lines
-  ctx.strokeStyle = "rgba(140, 255, 220, 0.5)";
-  ctx.lineWidth = 2;
-  for (const fy of [0.25, 0.5, 0.75]) {
-    ctx.beginPath();
-    ctx.moveTo(24, s * fy);
-    ctx.lineTo(s - 24, s * fy);
-    ctx.stroke();
-  }
-  // glinting vias
-  for (let i = 0; i < 260; i++) {
-    const a = 0.25 + rnd() * 0.65;
-    ctx.fillStyle = `rgba(160, 255, 225, ${a})`;
-    const r = rnd() < 0.85 ? 1 : 2;
-    ctx.fillRect(24 + rnd() * (s - 48), 24 + rnd() * (s - 48), r, r);
-  }
-  // border
-  ctx.strokeStyle = "rgba(150, 255, 225, 0.8)";
-  ctx.lineWidth = 3;
-  ctx.strokeRect(14, 14, s - 28, s - 28);
-
-  const t = new THREE.CanvasTexture(c);
-  t.anisotropy = 8;
-  t.colorSpace = THREE.SRGBColorSpace;
-  return t;
-}
-
-/* ------------------------------------------------------------------ */
-/* Materials — created per part so pass-through fades stay independent. */
 /* ------------------------------------------------------------------ */
 
-const silver = () =>
-  new THREE.MeshStandardMaterial({ color: "#82878f", metalness: 0.95, roughness: 0.26 });
-const gunmetal = () =>
-  new THREE.MeshStandardMaterial({ color: "#16181c", metalness: 0.85, roughness: 0.42 });
-const blackPlastic = () =>
-  new THREE.MeshStandardMaterial({ color: "#0b0c0f", metalness: 0.2, roughness: 0.6 });
-const copper = () =>
-  new THREE.MeshStandardMaterial({ color: "#b06b35", metalness: 1, roughness: 0.28 });
-const pcbMat = () =>
-  new THREE.MeshStandardMaterial({ color: "#0a1410", metalness: 0.35, roughness: 0.55 });
 const gold = () =>
   new THREE.MeshStandardMaterial({ color: "#c9a24a", metalness: 1, roughness: 0.35 });
 
@@ -195,37 +116,92 @@ export default function GPUCard({ mobile }: { mobile: boolean }) {
   const dieGlow = useRef<THREE.PointLight>(null!);
 
   const logoTex = useMemo(makeLogoTexture, []);
-  const dieTex = useMemo(makeDieTexture, []);
+
+  /* Photo textures uploaded to public/textures (real materials). */
+  const tex = useTexture({
+    alu: "/textures/aluminum_matte.jpg",
+    anod: "/textures/metal_anodized_dark.jpg",
+    plastic: "/textures/plastic_rough_black.jpg",
+    copperMap: "/textures/copper.jpg",
+    pcb: "/textures/pcb_top.jpg",
+    die: "/textures/die_package.jpg",
+    back: "/textures/backplate_brushed.jpg",
+  });
+  useMemo(() => {
+    for (const t of Object.values(tex)) {
+      t.colorSpace = THREE.SRGBColorSpace;
+      t.anisotropy = 8;
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      t.needsUpdate = true;
+    }
+  }, [tex]);
+
+  /* Material factories — one instance per call so the pass-through
+     dissolve fades each part independently. */
+  const silver = () =>
+    new THREE.MeshStandardMaterial({
+      map: tex.alu,
+      color: "#cdd2d9",
+      metalness: 0.9,
+      roughness: 0.34,
+    });
+  const gunmetal = () =>
+    new THREE.MeshStandardMaterial({
+      map: tex.anod,
+      color: "#caced5",
+      metalness: 0.8,
+      roughness: 0.42,
+    });
+  const blackPlastic = () =>
+    new THREE.MeshStandardMaterial({
+      map: tex.plastic,
+      color: "#c4c5c9",
+      metalness: 0.22,
+      roughness: 0.62,
+    });
+  const copper = () =>
+    new THREE.MeshStandardMaterial({
+      map: tex.copperMap,
+      color: "#ffffff",
+      metalness: 0.9,
+      roughness: 0.32,
+    });
+  const pcbMat = () =>
+    new THREE.MeshStandardMaterial({
+      map: tex.pcb,
+      color: "#ffffff",
+      metalness: 0.55,
+      roughness: 0.45,
+    });
 
   const dieMat = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
-        color: "#0a0f10",
-        metalness: 0.4,
+        map: tex.die,
+        metalness: 0.5,
         roughness: 0.35,
-        emissive: new THREE.Color("#8ffce0"),
-        emissiveMap: dieTex,
-        emissiveIntensity: 0.55,
+        emissive: new THREE.Color("#ffffff"),
+        emissiveMap: tex.die,
+        emissiveIntensity: 0.3,
       }),
-    [dieTex]
+    [tex.die]
+  );
+  const dieSide = useMemo(
+    () =>
+      new THREE.MeshStandardMaterial({ color: "#0d1b14", metalness: 0.4, roughness: 0.5 }),
+    []
   );
 
-  /* Per-part material registry for the pass-through dissolve. */
-  const partMats = useRef<Record<string, THREE.Material[]>>({});
-  useEffect(() => {
-    const reg: Record<string, THREE.Material[]> = {};
-    for (const id of Object.keys(PARTS)) {
-      const g = partRefs.current[id];
-      if (!g) continue;
-      const mats: THREE.Material[] = [];
-      g.traverse((o) => {
-        const m = (o as THREE.Mesh).material as THREE.Material | undefined;
-        if (m && !mats.includes(m)) mats.push(m);
-      });
-      reg[id] = mats;
-    }
-    partMats.current = reg;
-  }, []);
+  /* Pass-through dissolve: applied live to whatever materials the part's
+     meshes currently hold (survives re-renders that recreate materials). */
+  const applyPartFade = (g: THREE.Group, vis: number) => {
+    g.traverse((o) => {
+      const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
+      if (!m || Array.isArray(m)) return;
+      m.transparent = vis < 0.999;
+      m.opacity = vis;
+    });
+  };
 
   /* Memory chip base positions (spread radially when exploded). */
   const chipBases = useMemo(() => {
@@ -350,27 +326,24 @@ export default function GPUCard({ mobile }: { mobile: boolean }) {
     /* ---- pass-through dissolve during the traverse ---- */
     const inTraverse = p > 0.4 && p < PH.dive[1] + 0.01;
     const camZ = state.camera.position.z;
-    for (const [id, mats] of Object.entries(partMats.current)) {
+    for (const id of Object.keys(PARTS)) {
       if (id === "die") continue;
       const pr = partRefs.current[id];
       if (!pr) continue;
       let vis = 1;
       if (inTraverse) {
         pr.getWorldPosition(tmpV);
-        vis = THREE.MathUtils.clamp((camZ - (tmpV.z + 0.28)) / 0.85, 0, 1);
+        vis = THREE.MathUtils.clamp((camZ - (tmpV.z + 0.5)) / 1.2, 0, 1);
       }
       const s = 0.9 + 0.1 * vis;
       pr.scale.setScalar(s);
       pr.visible = vis > 0.003;
-      for (const m of mats) {
-        (m as THREE.MeshStandardMaterial).transparent = inTraverse;
-        (m as THREE.MeshStandardMaterial).opacity = inTraverse ? vis : 1;
-      }
+      applyPartFade(pr, inTraverse ? vis : 1);
     }
 
     /* ---- die energizes on approach ---- */
     const heat = smooth(range(p, PH.approach[0], PH.dive[0] + 0.02));
-    dieMat.emissiveIntensity = 0.55 + heat * 3.2;
+    dieMat.emissiveIntensity = 0.3 + heat * 2.6;
     if (dieGlow.current) dieGlow.current.intensity = heat * 2.2;
 
     /* ---- labels (anchored to their moving parts) ---- */
@@ -474,13 +447,13 @@ export default function GPUCard({ mobile }: { mobile: boolean }) {
             <group ref={side === "L" ? fanHubL : fanHubR}>
               <mesh rotation={[Math.PI / 2, 0, 0]}>
                 <cylinderGeometry args={[0.16, 0.16, 0.07, 32]} />
-                <meshStandardMaterial color="#101114" metalness={0.6} roughness={0.35} />
+                <meshStandardMaterial map={tex.plastic} color="#9a9ca1" metalness={0.4} roughness={0.5} />
               </mesh>
               {Array.from({ length: 9 }).map((_, i) => (
                 <group key={i} rotation={[0, 0, (i / 9) * TAU]}>
                   <mesh position={[0.34, 0, 0]} rotation={[0.5, 0, 0.12]}>
                     <boxGeometry args={[0.4, 0.14, 0.016]} />
-                    <meshStandardMaterial color="#0c0d10" metalness={0.35} roughness={0.5} />
+                    <meshStandardMaterial map={tex.plastic} color="#8f9196" metalness={0.3} roughness={0.55} />
                   </mesh>
                 </group>
               ))}
@@ -492,20 +465,20 @@ export default function GPUCard({ mobile }: { mobile: boolean }) {
         <group ref={(r) => void (partRefs.current.heatsink = r)}>
           <instancedMesh ref={finInst} args={[undefined, undefined, 64]}>
             <boxGeometry args={[0.016, 1.38, 0.34]} />
-            <meshStandardMaterial color="#82878f" metalness={0.95} roughness={0.38} />
+            <meshStandardMaterial map={tex.alu} color="#b9bec6" metalness={0.92} roughness={0.36} />
           </instancedMesh>
           {/* base plate — blocks see-through, grounds the fin array */}
           <mesh position={[0, 0, -0.185]}>
             <boxGeometry args={[3.08, 1.4, 0.03]} />
-            <meshStandardMaterial color="#4c5158" metalness={0.9} roughness={0.45} />
+            <meshStandardMaterial map={tex.alu} color="#7e838b" metalness={0.9} roughness={0.45} />
           </mesh>
           <mesh position={[0, 0.7, 0]}>
             <boxGeometry args={[3.1, 0.02, 0.34]} />
-            <meshStandardMaterial color="#6d727a" metalness={0.95} roughness={0.4} />
+            <meshStandardMaterial map={tex.alu} color="#9aa0a8" metalness={0.92} roughness={0.4} />
           </mesh>
           <mesh position={[0, -0.7, 0]}>
             <boxGeometry args={[3.1, 0.02, 0.34]} />
-            <meshStandardMaterial color="#6d727a" metalness={0.95} roughness={0.4} />
+            <meshStandardMaterial map={tex.alu} color="#9aa0a8" metalness={0.92} roughness={0.4} />
           </mesh>
         </group>
 
@@ -517,21 +490,16 @@ export default function GPUCard({ mobile }: { mobile: boolean }) {
           {[-0.42, -0.14, 0.14, 0.42].map((y, i) => (
             <mesh key={i} position={[0, y, 0.045]} rotation={[0, 0, Math.PI / 2]}>
               <cylinderGeometry args={[0.028, 0.028, 2.86, 12]} />
-              <meshStandardMaterial color="#8f5527" metalness={1} roughness={0.32} />
+              <meshStandardMaterial map={tex.copperMap} color="#b98756" metalness={0.95} roughness={0.34} />
             </mesh>
           ))}
         </group>
 
         {/* ======================= GPU DIE ======================= */}
         <group ref={(r) => void (partRefs.current.die = r)}>
-          {/* substrate */}
-          <mesh position={[0, 0, -0.006]}>
-            <boxGeometry args={[0.66, 0.66, 0.018]} />
-            <meshStandardMaterial color="#12331f" metalness={0.3} roughness={0.45} />
-          </mesh>
-          {/* silicon */}
-          <mesh position={[0, 0, 0.012]} material={dieMat}>
-            <boxGeometry args={[0.46, 0.46, 0.016]} />
+          {/* package photo on the front face, dark substrate sides */}
+          <mesh material={[dieSide, dieSide, dieSide, dieSide, dieMat, dieSide]}>
+            <boxGeometry args={[0.64, 0.64, 0.028]} />
           </mesh>
           <pointLight ref={dieGlow} color="#7cf5d4" intensity={0} distance={2.5} />
         </group>
@@ -545,7 +513,7 @@ export default function GPUCard({ mobile }: { mobile: boolean }) {
               rotation={[0, 0, i >= 8 ? Math.PI / 2 : 0]}
             >
               <boxGeometry args={[0.27, 0.15, 0.015]} />
-              <meshStandardMaterial color="#0b0c10" metalness={0.55} roughness={0.4} />
+              <meshStandardMaterial map={tex.anod} color="#9fa3aa" metalness={0.55} roughness={0.42} />
             </mesh>
           ))}
         </group>
@@ -562,19 +530,20 @@ export default function GPUCard({ mobile }: { mobile: boolean }) {
           {/* IO bracket */}
           <mesh position={[-1.72, -0.05, 0.1]}>
             <boxGeometry args={[0.05, 1.34, 0.5]} />
-            <meshStandardMaterial color="#9ba1a9" metalness={0.9} roughness={0.4} />
+            <meshStandardMaterial map={tex.alu} color="#c6cbd3" metalness={0.9} roughness={0.4} />
           </mesh>
           {/* surface components */}
           <instancedMesh ref={pcbInst} args={[undefined, undefined, 90]}>
             <boxGeometry args={[0.05, 0.05, 0.05]} />
-            <meshStandardMaterial color="#23262c" metalness={0.5} roughness={0.5} />
+            <meshStandardMaterial map={tex.anod} color="#b0b4bb" metalness={0.5} roughness={0.5} />
           </instancedMesh>
         </group>
 
         {/* ======================= BACKPLATE ======================= */}
         <group ref={(r) => void (partRefs.current.backplate = r)}>
-          <mesh material={gunmetal()}>
+          <mesh>
             <boxGeometry args={[3.36, 1.48, 0.024]} />
+            <meshStandardMaterial map={tex.back} color="#d6dade" metalness={0.85} roughness={0.38} />
           </mesh>
           {[0.95, 1.1, 1.25, 1.4].map((x, i) => (
             <mesh key={i} position={[x, 0, -0.014]}>
